@@ -6,9 +6,17 @@ import {
 	refreshToken,
 	forgotPassword,
 	resetPassword,
+	getMe,
 } from '../controllers/auth.controller';
 
-import { requireAuth } from '../middleware/auth.middleware';
+import {
+	setup2FA,
+	confirm2FASetup,
+	complete2FALogin,
+	disable2FAController,
+} from '../controllers/2fa.controller';
+
+import { requireAuth, requireTempToken } from '../middleware/auth.middleware';
 
 const router = Router();
 
@@ -26,5 +34,11 @@ router.get('/protected', requireAuth, (req, res) => {
 		data: { user: (req as any).user },
 	});
 });
+router.get('/me', requireAuth, getMe);
+
+router.post('/2fa/setup', requireAuth, setup2FA);
+router.post('/2fa/verify-setup', requireAuth, confirm2FASetup);
+router.post('/2fa/login', requireTempToken, complete2FALogin);
+router.post('/2fa/disable', requireAuth, disable2FAController);
 
 export default router;

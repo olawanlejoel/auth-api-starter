@@ -5,9 +5,10 @@ import {
 	generateRefreshToken,
 	verifyRefreshToken,
 	generateResetToken,
+	signTemp2FAToken,
 } from '../utils/token';
 
-export const signup = async (email: string, password: string) => {
+export const signup = async (name: string, email: string, password: string) => {
 	if (!email || !password) throw new Error('Email and password required');
 
 	const existing = await prisma.user.findUnique({ where: { email } });
@@ -15,7 +16,7 @@ export const signup = async (email: string, password: string) => {
 
 	const hashed = await hashPassword(password);
 	const user = await prisma.user.create({
-		data: { email, password: hashed },
+		data: { name, email, password: hashed },
 	});
 
 	const accessToken = generateAccessToken(user.id);
@@ -33,13 +34,16 @@ export const login = async (email: string, password: string) => {
 	const valid = await comparePasswords(password, user.password);
 	if (!valid) throw new Error('Invalid email or password');
 
+	if (user.twoFactorEnabled) {
+		const tempToken = signTemp2FAToken(user.id);
+		return { requires2FA: true, tempToken };
+	}
+
 	const accessToken = generateAccessToken(user.id);
 	const refreshToken = generateRefreshToken(user.id);
 
 	return { accessToken, refreshToken };
 };
-
-import jwt from 'jsonwebtoken';
 
 export const refreshToken = (token: string) => {
 	if (!token) throw new Error('No token provided');
@@ -74,7 +78,7 @@ export const forgotPassword = async (email: string) => {
 
 	// In real app: send email here
 	console.log(
-		`🔗 Password reset link: http://localhost:3000/reset-password?token=${token}`
+		`🔗 Password reset link: http://localhost:3001/reset-password?token=${token}`
 	);
 };
 
@@ -100,4 +104,19 @@ export const resetPassword = async (token: string, newPassword: string) => {
 			resetTokenExp: null,
 		},
 	});
+};
+
+export const getCurrentUser = async (userId: string) => {
+	const user = await prisma.user.findUnique({
+		where: { id: userId },
+		select: {
+			id: true,
+			name: true,
+			email: true,
+			twoFactorEnabled: true,
+		},
+	});
+
+	if (!user) throw new Error('User not found');
+	return user;
 };

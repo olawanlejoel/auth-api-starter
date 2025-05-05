@@ -3,8 +3,9 @@ import * as AuthService from '../services/auth.service';
 
 export const signup = async (req: Request, res: Response) => {
 	try {
-		const { email, password } = req.body;
+		const { name, email, password } = req.body;
 		const { accessToken, refreshToken } = await AuthService.signup(
+			name,
 			email,
 			password
 		);
@@ -22,22 +23,24 @@ export const signup = async (req: Request, res: Response) => {
 	}
 };
 
-export const login = async (req: Request, res: Response) => {
+export const login = async (req: Request, res: Response): Promise<void> => {
 	try {
 		const { email, password } = req.body;
-		const { accessToken, refreshToken } = await AuthService.login(
-			email,
-			password
-		);
+		const result = await AuthService.login(email, password);
 
-		res.cookie('refreshToken', refreshToken, {
+		if (result.requires2FA) {
+			res.json({ requires2FA: true, tempToken: result.tempToken });
+			return;
+		}
+
+		res.cookie('refreshToken', result.refreshToken, {
 			httpOnly: true,
 			secure: process.env.NODE_ENV === 'production',
 			sameSite: 'lax',
 			maxAge: 7 * 24 * 60 * 60 * 1000,
 		});
 
-		res.json({ accessToken });
+		res.json({ accessToken: result.accessToken });
 	} catch (err: any) {
 		res.status(400).json({ error: err.message });
 	}
@@ -99,5 +102,18 @@ export const resetPassword = async (req: Request, res: Response) => {
 		res.json({ message: 'Password reset successful' });
 	} catch (err: any) {
 		res.status(400).json({ error: err.message });
+	}
+};
+
+export const getMe = async (req: Request, res: Response) => {
+	try {
+		// User ID is injected by middleware
+		const userId = (req as any).userId;
+
+		const user = await AuthService.getCurrentUser(userId);
+
+		res.json({ user });
+	} catch (err: any) {
+		res.status(401).json({ error: 'Unauthorized' });
 	}
 };
